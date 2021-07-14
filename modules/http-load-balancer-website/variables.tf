@@ -172,3 +172,15 @@ variable "custom_headers" {
   type        = list(string)
   default     = []
 }
+
+variable "default_https_redirect" {
+  description = "If set to true, the traffic to http protocol will redirect to https"
+  type        = bool
+  default     = false
+}
+
+variable "default_host_redirect" {
+  description = "The target host of a host redirect site"
+  type        = string
+  default     = ""
+}

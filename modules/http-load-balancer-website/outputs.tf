@@ -10,21 +10,21 @@ output "load_balancer_ip_address" {
 
 output "website_bucket" {
   description = "Self link to the website bucket"
-  value       = module.site_bucket.website_bucket
+  value       = local.redirect_website ? null : module.site_bucket[0].website_bucket
 }
 
 output "access_logs_bucket" {
   description = "Self link to the access logs bucket"
-  value       = module.site_bucket.access_logs_bucket
+  value       = local.redirect_website ? null: module.site_bucket[0].access_logs_bucket
 }
 
 output "website_bucket_name" {
   description = "Name of the website bucket"
-  value       = module.site_bucket.website_bucket_name
+  value       = local.redirect_website ? null : module.site_bucket[0].website_bucket_name
 }
 
 output "access_logs_bucket_name" {
   description = "Name of the access logs bucket"
-  value       = module.site_bucket.access_logs_bucket_name
+  value       = local.redirect_website ? null : module.site_bucket[0].access_logs_bucket_name
 }
 

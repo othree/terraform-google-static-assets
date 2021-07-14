@@ -18,19 +18,23 @@ locals {
   # We have to use dashes instead of dots in the bucket name, because
   # that bucket is not a website
   website_domain_name_dashed = replace(var.website_domain_name, ".", "-")
+
+  # default
+  redirect_website = length(var.default_host_redirect) > 0
 }
 
 module "load_balancer" {
-  source = "github.com/gruntwork-io/terraform-google-load-balancer.git//modules/http-load-balancer?ref=v0.3.0"
+  source = "github.com/othree/terraform-google-load-balancer.git//modules/http-load-balancer?ref=static-site"
 
   name                  = local.website_domain_name_dashed
   project               = var.project
   url_map               = google_compute_url_map.urlmap.self_link
+  url_map_http          = var.default_https_redirect ? google_compute_url_map.urlmap_http[0].self_link : google_compute_url_map.urlmap.self_link
   create_dns_entries    = var.create_dns_entry
   custom_domain_names   = [var.website_domain_name]
   dns_managed_zone_name = var.dns_managed_zone_name
   dns_record_ttl        = var.dns_record_ttl
-  enable_http           = var.enable_http
+  enable_http           = var.enable_http || var.default_https_redirect
   enable_ssl            = var.enable_ssl
   ssl_certificates      = [var.ssl_certificate]
   custom_labels         = var.custom_labels
@@ -47,7 +51,29 @@ resource "google_compute_url_map" "urlmap" {
   name        = "${local.website_domain_name_dashed}-url-map"
   description = "URL map for ${local.website_domain_name_dashed}"
 
-  default_service = google_compute_backend_bucket.static.self_link
+  default_service = !local.redirect_website ? google_compute_backend_bucket.static[0].self_link : null
+
+  dynamic "default_url_redirect" {
+    for_each = local.redirect_website ? ["default_redirect"] : []
+    content {
+      host_redirect          = length(var.default_host_redirect) > 0 ? var.default_host_redirect : null
+      strip_query            = false
+    }
+  }
+}
+
+resource "google_compute_url_map" "urlmap_http" {
+  provider = google-beta
+  count    = var.default_https_redirect ? 1 : 0
+  project  = var.project
+
+  name        = "${local.website_domain_name_dashed}-url-map-http"
+  description = "URL map for ${local.website_domain_name_dashed} http protocol"
+
+  default_url_redirect {
+    https_redirect         = true
+    strip_query            = false
+  }
 }
 
 # ------------------------------------------------------------------------------
@@ -56,10 +82,12 @@ resource "google_compute_url_map" "urlmap" {
 
 resource "google_compute_backend_bucket" "static" {
   provider = google-beta
+  count    = local.redirect_website ? 0 : 1
+  
   project  = var.project
 
   name                    = "${local.website_domain_name_dashed}-bucket"
-  bucket_name             = module.site_bucket.website_bucket_name
+  bucket_name             = module.site_bucket[0].website_bucket_name
   custom_response_headers = var.custom_headers
   enable_cdn              = var.enable_cdn
 }
@@ -70,6 +98,7 @@ resource "google_compute_backend_bucket" "static" {
 
 module "site_bucket" {
   source = "../cloud-storage-static-website"
+  count    = local.redirect_website ? 0 : 1
 
   project = var.project
 
